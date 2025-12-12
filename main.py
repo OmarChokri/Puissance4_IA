@@ -1,25 +1,17 @@
 """
 main.py
-Version mise à jour :
-- menu Pygame pour choisir l'algorithme (minimax / alphabeta)
-- menu pour choisir l'heuristique (si disponible dans heuristic.py)
-- tentative automatique de passer l'heuristique aux fonctions find_best_move_...
-  si leur signature le permet (utilise inspect pour la détection)
+Programme principal avec interface graphique Pygame
+Menu de sélection de l'algorithme et de la profondeur
 """
 
 import pygame
 import sys
 import time
-import inspect
-
 from game import Connect4, ROWS, COLS, PLAYER_1, PLAYER_2, EMPTY
 from minimax import find_best_move_minimax
 from alphabeta import find_best_move_alphabeta
 
-# importer le module heuristic (présent dans votre repo)
-import heuristic as heuristic_module
-
-# Constantes UI
+# Constantes pour l'interface
 SQUARE_SIZE = 100
 WIDTH = COLS * SQUARE_SIZE
 HEIGHT = (ROWS + 1) * SQUARE_SIZE
@@ -32,293 +24,404 @@ RED = (255, 0, 0)
 YELLOW = (255, 255, 0)
 WHITE = (255, 255, 255)
 GREEN = (0, 255, 0)
+GRAY = (100, 100, 100)
+LIGHT_GRAY = (200, 200, 200)
+DARK_BLUE = (0, 51, 102)
 
-# Profondeur par défaut
-SEARCH_DEPTH = 5
+
+class Button:
+    """Classe pour créer des boutons interactifs"""
+    
+    def __init__(self, x, y, width, height, text, color, hover_color):
+        self.rect = pygame.Rect(x, y, width, height)
+        self.text = text
+        self.color = color
+        self.hover_color = hover_color
+        self.is_hovered = False
+        
+    def draw(self, screen, font):
+        """Dessine le bouton"""
+        color = self.hover_color if self.is_hovered else self.color
+        pygame.draw.rect(screen, color, self.rect, border_radius=10)
+        pygame.draw.rect(screen, WHITE, self.rect, 3, border_radius=10)
+        
+        text_surface = font.render(self.text, True, WHITE)
+        text_rect = text_surface.get_rect(center=self.rect.center)
+        screen.blit(text_surface, text_rect)
+    
+    def check_hover(self, mouse_pos):
+        """Vérifie si la souris est sur le bouton"""
+        self.is_hovered = self.rect.collidepoint(mouse_pos)
+        
+    def is_clicked(self, mouse_pos, mouse_clicked):
+        """Vérifie si le bouton est cliqué"""
+        return self.rect.collidepoint(mouse_pos) and mouse_clicked
 
 
-# ---------- Utils pour détecter si on peut passer une heuristique ----------
-def choose_heuristic_function():
+def show_menu(screen):
     """
-    Cherche dans heuristic_module une fonction utilisable.
-    Retourne (callable, name) ou (None, "Default") si rien trouvé.
+    Affiche le menu de sélection de l'algorithme et de la profondeur
+    
+    Returns:
+        tuple: (algorithm_name, depth) ou (None, None) si annulé
     """
-    candidates = ["evaluate", "heuristic", "score_position", "score", "eval"]
-    for name in candidates:
-        if hasattr(heuristic_module, name):
-            fn = getattr(heuristic_module, name)
-            if callable(fn):
-                return fn, name
-    # fallback : chercher toute fonction callable exportée
-    for attr in dir(heuristic_module):
-        if not attr.startswith("_"):
-            fn = getattr(heuristic_module, attr)
-            if callable(fn):
-                return fn, attr
-    return None, "Default"
-
-
-def can_pass_heuristic_to(fn):
-    """
-    Inspecte la signature de fn pour savoir si on peut lui passer un paramètre
-    keyword 'heuristic' ou 'eval_fn' ou si la fonction accepte >=4 positional args.
-    """
-    try:
-        sig = inspect.signature(fn)
-        params = sig.parameters
-        # accepte keyword 'heuristic' ou 'eval_fn' ?
-        if "heuristic" in params or "eval_fn" in params:
-            return "kw"
-        # accepte >=4 positional-only or positional-or-keyword params ?
-        pos_count = sum(1 for p in params.values()
-                        if p.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD))
-        if pos_count >= 4:
-            return "pos"
-    except Exception:
-        pass
-    return None
-
-
-# ---------- Menu Pygame ----------
-def choose_algorithm_and_heuristic(screen):
-    font_title = pygame.font.SysFont("monospace", 40)
-    font_btn = pygame.font.SysFont("monospace", 28)
-
-    heur_fn, heur_name = choose_heuristic_function()
-
-    while True:
-        screen.fill(BLACK)
-
-        title = font_title.render("Choisir l'algorithme et l'heuristique", True, WHITE)
-        screen.blit(title, (WIDTH // 2 - 300, 40))
-
-        # Boutons algos
-        minimax_rect = pygame.Rect(WIDTH // 2 - 200, 120, 400, 60)
-        alphabeta_rect = pygame.Rect(WIDTH // 2 - 200, 200, 400, 60)
-
-        pygame.draw.rect(screen, BLUE, minimax_rect)
-        pygame.draw.rect(screen, BLUE, alphabeta_rect)
-
-        txt1 = font_btn.render("Minimax", True, WHITE)
-        txt2 = font_btn.render("Alpha-Beta", True, WHITE)
-
-        screen.blit(txt1, (minimax_rect.x + 30, minimax_rect.y + 12))
-        screen.blit(txt2, (alphabeta_rect.x + 10, alphabeta_rect.y + 12))
-
-        # Héuristique affichée (choisie automatiquement si trouvée)
-        heur_text = font_btn.render(f"Heuristique détectée : {heur_name}", True, WHITE)
-        screen.blit(heur_text, (WIDTH // 2 - 220, 300))
-
-        hint = font_btn.render("Cliquez sur un algorithme pour démarrer", True, WHITE)
-        screen.blit(hint, (WIDTH // 2 - 220, 350))
-
-        pygame.display.update()
-
+    pygame.display.set_caption('Puissance 4 - Configuration')
+    
+    # Polices
+    font_title = pygame.font.SysFont("Arial", 50, bold=True)
+    font_subtitle = pygame.font.SysFont("Arial", 30, bold=True)
+    font_text = pygame.font.SysFont("Arial", 24)
+    font_button = pygame.font.SysFont("Arial", 28, bold=True)
+    
+    # Variables de sélection
+    selected_algo = None  # 'minimax' ou 'alphabeta'
+    selected_depth = 5    # Profondeur par défaut
+    
+    # Boutons pour les algorithmes
+    btn_minimax = Button(100, 200, 250, 80, "Min-Max", RED, (255, 50, 50))
+    btn_alphabeta = Button(WIDTH - 350, 200, 250, 80, "Alpha-Beta", BLUE, (50, 150, 255))
+    
+    # Boutons pour la profondeur
+    depth_buttons = []
+    depths = [3, 4, 5, 6, 7]
+    btn_width = 80
+    btn_spacing = 20
+    start_x = (WIDTH - (len(depths) * btn_width + (len(depths)-1) * btn_spacing)) // 2
+    
+    for i, depth in enumerate(depths):
+        x = start_x + i * (btn_width + btn_spacing)
+        btn = Button(x, 400, btn_width, 60, str(depth), GRAY, GREEN)
+        depth_buttons.append((btn, depth))
+    
+    # Bouton Jouer
+    btn_play = Button(WIDTH//2 - 100, 550, 200, 60, "JOUER", GREEN, (0, 200, 0))
+    
+    running = True
+    while running:
+        screen.fill(DARK_BLUE)
+        mouse_pos = pygame.mouse.get_pos()
+        mouse_clicked = False
+        
+        # Gestion des événements
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                sys.exit()
+                return None, None
             if event.type == pygame.MOUSEBUTTONDOWN:
-                mx, my = pygame.mouse.get_pos()
-                if minimax_rect.collidepoint(mx, my):
-                    return "minimax", heur_fn, heur_name
-                if alphabeta_rect.collidepoint(mx, my):
-                    return "alphabeta", heur_fn, heur_name
+                mouse_clicked = True
+        
+        # Titre
+        title = font_title.render("PUISSANCE 4 - IA", True, YELLOW)
+        title_rect = title.get_rect(center=(WIDTH//2, 80))
+        screen.blit(title, title_rect)
+        
+        # Section Algorithme
+        subtitle_algo = font_subtitle.render("Choisissez l'algorithme :", True, WHITE)
+        screen.blit(subtitle_algo, (50, 140))
+        
+        # Boutons algorithme
+        btn_minimax.check_hover(mouse_pos)
+        btn_alphabeta.check_hover(mouse_pos)
+        
+        btn_minimax.draw(screen, font_button)
+        btn_alphabeta.draw(screen, font_button)
+        
+        # Sélection algorithme
+        if btn_minimax.is_clicked(mouse_pos, mouse_clicked):
+            selected_algo = 'minimax'
+        if btn_alphabeta.is_clicked(mouse_pos, mouse_clicked):
+            selected_algo = 'alphabeta'
+        
+        # Indicateur de sélection algorithme
+        if selected_algo == 'minimax':
+            pygame.draw.rect(screen, YELLOW, btn_minimax.rect, 5, border_radius=10)
+        elif selected_algo == 'alphabeta':
+            pygame.draw.rect(screen, YELLOW, btn_alphabeta.rect, 5, border_radius=10)
+        
+        # Section Profondeur
+        subtitle_depth = font_subtitle.render("Choisissez la profondeur :", True, WHITE)
+        screen.blit(subtitle_depth, (50, 340))
+        
+        # Boutons profondeur
+        for btn, depth in depth_buttons:
+            btn.check_hover(mouse_pos)
+            btn.draw(screen, font_button)
+            
+            if btn.is_clicked(mouse_pos, mouse_clicked):
+                selected_depth = depth
+            
+            # Indicateur de sélection
+            if selected_depth == depth:
+                pygame.draw.rect(screen, YELLOW, btn.rect, 5, border_radius=10)
+        
+        # Informations sur la profondeur
+        depth_info = [
+            "Prof. 3-4 : Rapide, IA moyenne",
+            "Prof. 5 : Équilibré (recommandé)",
+            "Prof. 6-7 : Lent, IA excellente"
+        ]
+        for i, info in enumerate(depth_info):
+            text = font_text.render(info, True, LIGHT_GRAY)
+            screen.blit(text, (50, 490 + i * 25))
+        
+        # Bouton Jouer (actif seulement si algo sélectionné)
+        if selected_algo:
+            btn_play.check_hover(mouse_pos)
+            btn_play.draw(screen, font_button)
+            
+            if btn_play.is_clicked(mouse_pos, mouse_clicked):
+                return selected_algo, selected_depth
+        else:
+            # Bouton grisé si pas de sélection
+            pygame.draw.rect(screen, GRAY, btn_play.rect, border_radius=10)
+            pygame.draw.rect(screen, WHITE, btn_play.rect, 3, border_radius=10)
+            text_surface = font_button.render("JOUER", True, LIGHT_GRAY)
+            text_rect = text_surface.get_rect(center=btn_play.rect.center)
+            screen.blit(text_surface, text_rect)
+            
+            # Message
+            msg = font_text.render("Sélectionnez un algorithme", True, YELLOW)
+            msg_rect = msg.get_rect(center=(WIDTH//2, 630))
+            screen.blit(msg, msg_rect)
+        
+        pygame.display.update()
+    
+    return None, None
 
 
-# ---------- Dessin plateau & stats (identique) ----------
 def draw_board(screen, game):
+    """
+    Dessine le plateau de jeu avec Pygame
+    
+    Args:
+        screen: Surface Pygame
+        game (Connect4): Instance du jeu
+    """
+    # Dessine le fond bleu avec les trous noirs
     for c in range(COLS):
         for r in range(ROWS):
-            pygame.draw.rect(screen, BLUE,
-                             (c * SQUARE_SIZE, r * SQUARE_SIZE + SQUARE_SIZE,
-                              SQUARE_SIZE, SQUARE_SIZE))
-            pygame.draw.circle(screen, BLACK,
-                               (int(c * SQUARE_SIZE + SQUARE_SIZE / 2),
-                                int(r * SQUARE_SIZE + SQUARE_SIZE + SQUARE_SIZE / 2)),
-                               RADIUS)
-
+            pygame.draw.rect(screen, BLUE, 
+                           (c * SQUARE_SIZE, r * SQUARE_SIZE + SQUARE_SIZE, 
+                            SQUARE_SIZE, SQUARE_SIZE))
+            pygame.draw.circle(screen, BLACK, 
+                             (int(c * SQUARE_SIZE + SQUARE_SIZE/2), 
+                              int(r * SQUARE_SIZE + SQUARE_SIZE + SQUARE_SIZE/2)), 
+                             RADIUS)
+    
+    # Dessine les pions
     for c in range(COLS):
         for r in range(ROWS):
             if game.board[r][c] == PLAYER_1:
-                pygame.draw.circle(screen, RED,
-                                   (int(c * SQUARE_SIZE + SQUARE_SIZE / 2),
-                                    HEIGHT - int(r * SQUARE_SIZE + SQUARE_SIZE / 2)),
-                                   RADIUS)
+                pygame.draw.circle(screen, RED, 
+                                 (int(c * SQUARE_SIZE + SQUARE_SIZE/2), 
+                                  HEIGHT - int(r * SQUARE_SIZE + SQUARE_SIZE/2)), 
+                                 RADIUS)
             elif game.board[r][c] == PLAYER_2:
-                pygame.draw.circle(screen, YELLOW,
-                                   (int(c * SQUARE_SIZE + SQUARE_SIZE / 2),
-                                    HEIGHT - int(r * SQUARE_SIZE + SQUARE_SIZE / 2)),
-                                   RADIUS)
+                pygame.draw.circle(screen, YELLOW, 
+                                 (int(c * SQUARE_SIZE + SQUARE_SIZE/2), 
+                                  HEIGHT - int(r * SQUARE_SIZE + SQUARE_SIZE/2)), 
+                                 RADIUS)
     pygame.display.update()
 
 
-def display_stats(screen, font, algo_name, exec_time, nodes, pruned=None, heur_name="Default"):
+def display_stats(screen, font, algo_name, exec_time, nodes, pruned=None):
+    """
+    Affiche les statistiques de l'IA sur l'écran
+    
+    Args:
+        screen: Surface Pygame
+        font: Police pour le texte
+        algo_name (str): Nom de l'algorithme
+        exec_time (float): Temps d'exécution en secondes
+        nodes (int): Nombre de nœuds explorés
+        pruned (int): Nombre de nœuds élagués (pour Alpha-Beta)
+    """
     y_offset = HEIGHT - 90
-    text = font.render(f"Algo: {algo_name} | Heur: {heur_name}", True, WHITE)
+    
+    # Nom de l'algorithme
+    text = font.render(f"Algo: {algo_name}", True, WHITE)
     screen.blit(text, (10, y_offset))
-
+    
+    # Temps d'exécution
     text = font.render(f"Temps: {exec_time:.3f}s", True, WHITE)
     screen.blit(text, (10, y_offset + 20))
-
+    
+    # Nœuds explorés
     text = font.render(f"Noeuds: {nodes}", True, WHITE)
     screen.blit(text, (10, y_offset + 40))
-
+    
+    # Nœuds élagués (si Alpha-Beta)
     if pruned is not None:
         text = font.render(f"Elagages: {pruned}", True, GREEN)
         screen.blit(text, (10, y_offset + 60))
-
+    
     pygame.display.update()
 
 
-# ---------- Main ----------
-def main():
-    pygame.init()
+def play_game(ai_algorithm, search_depth):
+    """
+    Lance une partie avec les paramètres choisis
+    
+    Args:
+        ai_algorithm (str): 'minimax' ou 'alphabeta'
+        search_depth (int): Profondeur de recherche
+    """
+    # Initialisation de Pygame
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    pygame.display.set_caption("Puissance 4 - IA")
-
-    # Choix menu : algo + heuristique (heur_fn peut être None)
-    AI_ALGORITHM, heur_fn, heur_name = choose_algorithm_and_heuristic(screen)
-    pygame.display.set_caption(f"Puissance 4 - {AI_ALGORITHM.upper()} (Heur: {heur_name})")
-
+    pygame.display.set_caption(f'Puissance 4 - {ai_algorithm.upper()} (Prof. {search_depth})')
+    
+    # Polices
     font_large = pygame.font.SysFont("monospace", 75)
     font_small = pygame.font.SysFont("monospace", 20)
-
+    
+    # Initialisation du jeu
     game = Connect4()
     draw_board(screen, game)
-
+    
+    # Variables pour les statistiques
     last_ai_time = 0
     last_ai_nodes = 0
     last_ai_pruned = 0
-
-    print(f"\n{'='*60}")
-    print(f"PUISSANCE 4 - IA avec {AI_ALGORITHM.upper()} (Heur: {heur_name})")
-    print(f"Profondeur de recherche : {SEARCH_DEPTH}")
-    print(f"{'='*60}\n")
-
-    # préparer infos sur signature des fonctions
-    minimax_accept = can_pass_heuristic_to(find_best_move_minimax)
-    alphabeta_accept = can_pass_heuristic_to(find_best_move_alphabeta)
-
+    
+    print(f"\n{'='*70}")
+    print(f"PUISSANCE 4 - IA avec {ai_algorithm.upper()}")
+    print(f"Profondeur de recherche : {search_depth}")
+    print(f"{'='*70}\n")
+    
+    # Boucle principale
     while not game.game_over:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                sys.exit()
-
+                return
+            
+            # Affichage du pion qui suit la souris
             if event.type == pygame.MOUSEMOTION:
                 pygame.draw.rect(screen, BLACK, (0, 0, WIDTH, SQUARE_SIZE))
                 posx = event.pos[0]
                 if game.turn == PLAYER_1:
-                    pygame.draw.circle(screen, RED, (posx, int(SQUARE_SIZE / 2)), RADIUS)
-
+                    pygame.draw.circle(screen, RED, (posx, int(SQUARE_SIZE/2)), RADIUS)
+                
+                # Afficher les stats de la dernière décision de l'IA
                 if last_ai_nodes > 0:
-                    display_stats(screen, font_small, AI_ALGORITHM.upper(),
-                                  last_ai_time, last_ai_nodes,
-                                  last_ai_pruned if AI_ALGORITHM == 'alphabeta' else None,
-                                  heur_name)
+                    display_stats(screen, font_small, ai_algorithm.upper(), 
+                                last_ai_time, last_ai_nodes, 
+                                last_ai_pruned if ai_algorithm == 'alphabeta' else None)
+                
                 pygame.display.update()
-
+            
+            # Gestion du clic (Tour du joueur)
             if event.type == pygame.MOUSEBUTTONDOWN:
                 pygame.draw.rect(screen, BLACK, (0, 0, WIDTH, SQUARE_SIZE))
-
+                
                 if game.turn == PLAYER_1:
                     posx = event.pos[0]
                     col = int(posx // SQUARE_SIZE)
-
+                    
                     if game.is_valid_location(col):
                         row = game.get_next_open_row(col)
                         game.drop_piece(row, col, PLAYER_1)
-
+                        
                         if game.check_win(PLAYER_1):
                             label = font_large.render("Vous gagnez!", 1, RED)
                             screen.blit(label, (40, 10))
                             game.game_over = True
-
+                            print("\n🎉 VICTOIRE DU JOUEUR ! 🎉\n")
+                        
                         game.turn = PLAYER_2
                         draw_board(screen, game)
-
-        # Tour IA
+        
+        # Tour de l'IA (PLAYER_2)
         if game.turn == PLAYER_2 and not game.game_over:
+            # Afficher "L'IA réfléchit..."
             pygame.draw.rect(screen, BLACK, (0, 0, WIDTH, SQUARE_SIZE))
-            label = font_small.render("L'IA réfléchit...", 1, YELLOW)
-            screen.blit(label, (WIDTH // 2 - 100, 10))
+            label = font_small.render("L'IA reflechit...", 1, YELLOW)
+            screen.blit(label, (WIDTH//2 - 100, 10))
             pygame.display.update()
-
+            
+            print(f"\n{'='*70}")
+            print(f"Tour de l'IA ({ai_algorithm.upper()})...")
+            
+            # Mesurer le temps d'exécution
             start_time = time.time()
-
-            # appel réfléchi : si la fonction accepte une heuristique, on la passe
-            try:
-                if AI_ALGORITHM == "minimax":
-                    if heur_fn and minimax_accept:
-                        if minimax_accept == "kw":
-                            col, score, stats = find_best_move_minimax(game, SEARCH_DEPTH, heuristic=heur_fn)
-                        else:
-                            col, score, stats = find_best_move_minimax(game, SEARCH_DEPTH, heur_fn)
-                    else:
-                        col, score, stats = find_best_move_minimax(game, SEARCH_DEPTH)
-                    last_ai_pruned = 0
-                else:  # alphabeta
-                    if heur_fn and alphabeta_accept:
-                        if alphabeta_accept == "kw":
-                            col, score, stats = find_best_move_alphabeta(game, SEARCH_DEPTH, heuristic=heur_fn)
-                        else:
-                            col, score, stats = find_best_move_alphabeta(game, SEARCH_DEPTH, heur_fn)
-                    else:
-                        col, score, stats = find_best_move_alphabeta(game, SEARCH_DEPTH)
-                    last_ai_pruned = stats.get("nodes_pruned", 0)
-            except TypeError:
-                # Si signature inattendue, fallback sans heuristique
-                if AI_ALGORITHM == "minimax":
-                    col, score, stats = find_best_move_minimax(game, SEARCH_DEPTH)
-                    last_ai_pruned = 0
-                else:
-                    col, score, stats = find_best_move_alphabeta(game, SEARCH_DEPTH)
-                    last_ai_pruned = stats.get("nodes_pruned", 0)
-
-            execution_time = time.time() - start_time
+            
+            # Choisir l'algorithme
+            if ai_algorithm == 'minimax':
+                col, score, stats = find_best_move_minimax(game, search_depth)
+                last_ai_pruned = 0  # Min-Max n'a pas d'élagage
+            else:  # alphabeta
+                col, score, stats = find_best_move_alphabeta(game, search_depth)
+                last_ai_pruned = stats.get('nodes_pruned', 0)
+            
+            end_time = time.time()
+            execution_time = end_time - start_time
+            
+            # Sauvegarder les statistiques
             last_ai_time = execution_time
-            last_ai_nodes = stats.get("nodes_explored", stats.get("nodes", 0))
-
-            # logs console
+            last_ai_nodes = stats['nodes_explored']
+            
+            # Afficher les statistiques
             print(f"Colonne choisie : {col}")
             print(f"Score évalué : {score}")
             print(f"Temps d'exécution : {execution_time:.3f} secondes")
-            print(f"Nœuds explorés : {last_ai_nodes}")
-            if AI_ALGORITHM == "alphabeta":
-                print(f"Nœuds élagués : {last_ai_pruned}")
-            print(f"{'='*60}\n")
-
-            # jouer le coup
+            print(f"Nœuds explorés : {stats['nodes_explored']}")
+            if ai_algorithm == 'alphabeta':
+                print(f"Nœuds élagués : {stats['nodes_pruned']}")
+                efficiency = (stats['nodes_pruned'] / stats['nodes_explored'] * 100) if stats['nodes_explored'] > 0 else 0
+                print(f"Efficacité élagage : {efficiency:.1f}%")
+            print(f"{'='*70}\n")
+            
+            # Jouer le coup
             if game.is_valid_location(col):
                 row = game.get_next_open_row(col)
                 game.drop_piece(row, col, PLAYER_2)
-
+                
                 if game.check_win(PLAYER_2):
                     pygame.draw.rect(screen, BLACK, (0, 0, WIDTH, SQUARE_SIZE))
                     label = font_large.render("L'IA gagne!", 1, YELLOW)
                     screen.blit(label, (40, 10))
                     game.game_over = True
-
+                    print("\n🤖 VICTOIRE DE L'IA ! 🤖\n")
+                
                 game.turn = PLAYER_1
                 draw_board(screen, game)
-
-        # match nul
+        
+        # Vérification match nul
         if len(game.get_valid_locations()) == 0 and not game.game_over:
             pygame.draw.rect(screen, BLACK, (0, 0, WIDTH, SQUARE_SIZE))
             label = font_large.render("Match nul!", 1, WHITE)
             screen.blit(label, (80, 10))
             game.game_over = True
             print("\n🤝 MATCH NUL ! 🤝\n")
-
-    # fin : afficher stats
+    
+    # Afficher les statistiques finales
     pygame.draw.rect(screen, BLACK, (0, 0, WIDTH, SQUARE_SIZE))
     if last_ai_nodes > 0:
-        display_stats(screen, font_small, AI_ALGORITHM.upper(),
-                      last_ai_time, last_ai_nodes,
-                      last_ai_pruned if AI_ALGORITHM == "alphabeta" else None,
-                      heur_name)
+        display_stats(screen, font_small, ai_algorithm.upper(), 
+                    last_ai_time, last_ai_nodes, 
+                    last_ai_pruned if ai_algorithm == 'alphabeta' else None)
     pygame.display.update()
-
+    
+    # Attendre 5 secondes avant de fermer
     pygame.time.wait(5000)
+
+
+def main():
+    """Fonction principale"""
+    # Initialisation de Pygame
+    pygame.init()
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    
+    # Afficher le menu de configuration
+    ai_algorithm, search_depth = show_menu(screen)
+    
+    # Si l'utilisateur a fermé le menu
+    if ai_algorithm is None:
+        pygame.quit()
+        sys.exit()
+    
+    # Lancer la partie
+    play_game(ai_algorithm, search_depth)
+    
+    pygame.quit()
 
 
 if __name__ == "__main__":
