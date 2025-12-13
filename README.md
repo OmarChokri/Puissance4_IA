@@ -307,7 +307,7 @@ NOM1_NOM2.zip
 
 ## 🎓 Auteurs
 
-Omar chokri
+Omar chokri X Bahaeddine Ellouze
 
 Faculté des Sciences de Tunis
 IGL4 - TP Intelligence Artificielle
