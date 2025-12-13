@@ -188,13 +188,14 @@ def show_menu(screen):
     return None, None
 
 
-def draw_board(screen, game):
+def draw_board(screen, game, winning_tokens=None):
     """
     Dessine le plateau de jeu avec Pygame
     
     Args:
         screen: Surface Pygame
         game (Connect4): Instance du jeu
+        winning_tokens (list): Liste des coordonnées (row, col) des pions gagnants
     """
     # Dessine le fond bleu avec les trous noirs
     for c in range(COLS):
@@ -211,12 +212,18 @@ def draw_board(screen, game):
     for c in range(COLS):
         for r in range(ROWS):
             if game.board[r][c] == PLAYER_1:
-                pygame.draw.circle(screen, RED, 
+                color = RED
+                if winning_tokens and (r, c) in winning_tokens:
+                    color = GREEN
+                pygame.draw.circle(screen, color, 
                                  (int(c * SQUARE_SIZE + SQUARE_SIZE/2), 
                                   HEIGHT - int(r * SQUARE_SIZE + SQUARE_SIZE/2)), 
                                  RADIUS)
             elif game.board[r][c] == PLAYER_2:
-                pygame.draw.circle(screen, YELLOW, 
+                color = YELLOW
+                if winning_tokens and (r, c) in winning_tokens:
+                    color = GREEN
+                pygame.draw.circle(screen, color, 
                                  (int(c * SQUARE_SIZE + SQUARE_SIZE/2), 
                                   HEIGHT - int(r * SQUARE_SIZE + SQUARE_SIZE/2)), 
                                  RADIUS)
@@ -282,6 +289,11 @@ def play_game(ai_algorithm, search_depth):
     last_ai_nodes = 0
     last_ai_pruned = 0
     
+    # Message de fin et jetons gagnants
+    end_message = ""
+    end_message_color = WHITE
+    winning_tokens = []
+    
     print(f"\n{'='*70}")
     print(f"PUISSANCE 4 - IA avec {ai_algorithm.upper()}")
     print(f"Profondeur de recherche : {search_depth}")
@@ -324,10 +336,13 @@ def play_game(ai_algorithm, search_depth):
                             label = font_large.render("Vous gagnez!", 1, RED)
                             screen.blit(label, (40, 10))
                             game.game_over = True
+                            end_message = "VICTOIRE !"
+                            end_message_color = RED
+                            winning_tokens = game.get_winning_sequence(PLAYER_1)
                             print("\n🎉 VICTOIRE DU JOUEUR ! 🎉\n")
                         
                         game.turn = PLAYER_2
-                        draw_board(screen, game)
+                        draw_board(screen, game, winning_tokens)
         
         # Tour de l'IA (PLAYER_2)
         if game.turn == PLAYER_2 and not game.game_over:
@@ -379,10 +394,13 @@ def play_game(ai_algorithm, search_depth):
                     label = font_large.render("L'IA gagne!", 1, YELLOW)
                     screen.blit(label, (40, 10))
                     game.game_over = True
+                    end_message = "IA GAGNE !"
+                    end_message_color = YELLOW
+                    winning_tokens = game.get_winning_sequence(PLAYER_2)
                     print("\n🤖 VICTOIRE DE L'IA ! 🤖\n")
                 
                 game.turn = PLAYER_1
-                draw_board(screen, game)
+                draw_board(screen, game, winning_tokens)
         
         # Vérification match nul
         if len(game.get_valid_locations()) == 0 and not game.game_over:
@@ -390,10 +408,18 @@ def play_game(ai_algorithm, search_depth):
             label = font_large.render("Match nul!", 1, WHITE)
             screen.blit(label, (80, 10))
             game.game_over = True
+            end_message = "MATCH NUL !"
+            end_message_color = WHITE
             print("\n🤝 MATCH NUL ! 🤝\n")
     
-    # Afficher les statistiques finales
+    # Afficher les statistiques finales et le message de fin
     pygame.draw.rect(screen, BLACK, (0, 0, WIDTH, SQUARE_SIZE))
+    
+    if end_message:
+        label = font_large.render(end_message, 1, end_message_color)
+        label_rect = label.get_rect(center=(WIDTH//2, SQUARE_SIZE//2))
+        screen.blit(label, label_rect)
+        
     if last_ai_nodes > 0:
         display_stats(screen, font_small, ai_algorithm.upper(), 
                     last_ai_time, last_ai_nodes, 

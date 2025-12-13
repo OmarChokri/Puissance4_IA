@@ -109,6 +109,54 @@ class Connect4:
         
         return False
     
+    def get_winning_sequence(self, piece):
+        """
+        Retourne les coordonnées des 4 pions gagnants
+        
+        Args:
+            piece (int): Numéro du joueur (1 ou 2)
+            
+        Returns:
+            list: Liste de tuples (row, col) des pions gagnants, ou [] si pas de victoire
+        """
+        # Vérification horizontale
+        for c in range(COLS - 3):
+            for r in range(ROWS):
+                if (self.board[r][c] == piece and 
+                    self.board[r][c+1] == piece and
+                    self.board[r][c+2] == piece and 
+                    self.board[r][c+3] == piece):
+                    return [(r, c), (r, c+1), (r, c+2), (r, c+3)]
+        
+        # Vérification verticale
+        for c in range(COLS):
+            for r in range(ROWS - 3):
+                if (self.board[r][c] == piece and 
+                    self.board[r+1][c] == piece and
+                    self.board[r+2][c] == piece and 
+                    self.board[r+3][c] == piece):
+                    return [(r, c), (r+1, c), (r+2, c), (r+3, c)]
+        
+        # Vérification diagonale positive (/)
+        for c in range(COLS - 3):
+            for r in range(ROWS - 3):
+                if (self.board[r][c] == piece and 
+                    self.board[r+1][c+1] == piece and
+                    self.board[r+2][c+2] == piece and 
+                    self.board[r+3][c+3] == piece):
+                    return [(r, c), (r+1, c+1), (r+2, c+2), (r+3, c+3)]
+        
+        # Vérification diagonale négative (\)
+        for c in range(COLS - 3):
+            for r in range(3, ROWS):
+                if (self.board[r][c] == piece and 
+                    self.board[r-1][c+1] == piece and
+                    self.board[r-2][c+2] == piece and 
+                    self.board[r-3][c+3] == piece):
+                    return [(r, c), (r-1, c+1), (r-2, c+2), (r-3, c+3)]
+        
+        return []
+    
     def is_terminal_node(self):
         """
         Vérifie si le jeu est dans un état terminal
